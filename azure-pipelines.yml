@@ -1,0 +1,102 @@
+trigger:
+- main
+
+resources:
+  repositories:
+    - repository: github_repo
+      type: github
+      name: asecurityguru/devsecops-azure-devops-end-to-end-repo
+      endpoint: github_service_connection
+
+stages:
+# Stage 1: Build and Push Docker Image
+- stage: Build
+  jobs:
+  - job: Build
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - checkout: github_repo
+    - task: UsePythonVersion@0
+      inputs:
+        versionSpec: '3.x'
+        addToPath: true
+    - script: |
+        python -m venv env
+        source env/bin/activate
+        pip install -r requirements.txt
+      displayName: 'Install dependencies'
+    - task: Docker@2
+      inputs:
+        containerRegistry: '$(dockerRegistryServiceConnection)'
+        repository: 'my-app'
+        command: 'buildAndPush'
+        Dockerfile: 'Dockerfile'
+        tags: |
+          $(Build.BuildId)
+
+# Stage 2: Deploy to Kubernetes with Manual Intervention
+- stage: Deploy
+  dependsOn: Build
+  jobs:
+  - deployment: Deploy
+    pool:
+      vmImage: 'ubuntu-latest'
+    environment: 'staging'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - download: current
+            artifact: drop
+          - task: Kubernetes@1
+            inputs:
+              connectionType: 'Azure Resource Manager'
+              azureSubscriptionEndpoint: '$(azureSubscriptionEndpoint)'
+              azureResourceGroup: '$(azureResourceGroup)'
+              kubernetesCluster: '$(kubernetesCluster)'
+              namespace: 'default'
+              command: 'apply'
+              useConfigurationFile: true
+              configuration: 'manifests/deployment.yaml'
+
+# Stage 3: Manual Approval Gate
+- stage: ApprovalGate
+  dependsOn: Deploy
+  jobs:
+  - job: Approval
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - task: ManualValidation@0
+      inputs:
+        notifyUsers: 'user@domain.com'
+        instructions: 'Please validate the deployment and approve.'
+        onTimeout: 'reject'
+        timeout: '30'
+
+# Stage 4: Deploy to Production
+- stage: ProductionDeploy
+  dependsOn: ApprovalGate
+  jobs:
+  - deployment: Deploy
+    pool:
+      vmImage: 'ubuntu-latest'
+    environment: 'production'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - download: current
+            artifact: drop
+          - task: Kubernetes@1
+            inputs:
+              connectionType: 'Azure Resource Manager'
+              azureSubscriptionEndpoint: '$(azureSubscriptionEndpoint)'
+              azureResourceGroup: '$(azureResourceGroup)'
+              kubernetesCluster: '$(kubernetesCluster)'
+              namespace: 'default'
+              command: 'apply'
+              useConfigurationFile: true
+              configuration: 'manifests/deployment.yaml'
+

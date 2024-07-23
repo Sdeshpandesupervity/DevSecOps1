@@ -3,7 +3,7 @@ trigger:
 
 resources:
   repositories:
-    - repository: github_repo
+    - repository: https://github.com/Sdeshpandesupervity/DevSecOps1.git
       type: github
       name: asecurityguru/devsecops-azure-devops-end-to-end-repo
       endpoint: github_service_connection
@@ -28,7 +28,7 @@ stages:
       displayName: 'Install dependencies'
     - task: Docker@2
       inputs:
-        containerRegistry: '$(dockerRegistryServiceConnection)'
+        containerRegistry: '$(docker registry)'
         repository: 'my-app'
         command: 'buildAndPush'
         Dockerfile: 'Dockerfile'

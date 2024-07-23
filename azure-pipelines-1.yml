@@ -1,0 +1,34 @@
+pool:
+  name: Azure Pipelines
+
+steps:
+- bash: |
+    # Write your commands here
+    
+    # Get the build tag based on the date
+    buildtag=$(date +'%Y.%m.%d')
+    echo "Build Tag: $buildtag"
+    
+    version=$(git rev-parse --short=8 HEAD)
+    echo "Version ID: $version"
+    
+    # Add the '-' prefix to the version number
+    version_with_prefix="-$version"
+    echo "Version with Prefix: $version_with_prefix"
+    
+    # Append the version ID to the build tag
+    buildtagwithversion="$buildtag$version_with_prefix"
+    echo "Build Tag with Version: $buildtagwithversion"
+    
+    # Set the build tag with version as a variable
+    echo "##vso[task.setvariable variable=build-tag-with-version]$buildtagwithversion"
+    
+  displayName: 'Bash Script'
+
+- task: Docker@2
+  displayName: buildAndPush
+  inputs:
+    containerRegistry: 'superapp-acr-svc-conn'
+    repository: 'superapp-cgptdocsearch-qa'
+    tags: '$(build-tag-with-version)'
+
